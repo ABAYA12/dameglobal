@@ -58,123 +58,52 @@ export const documentRouter = createTRPCRouter({
         orderBy: { createdAt: "desc" },
       });
 
-      // Group documents by folder
-      const documentsByFolder = documents.reduce((acc, doc) => {
-        if (!acc[doc.folder]) {
-          acc[doc.folder] = [];
-        }
-        acc[doc.folder].push(doc);
-        return acc;
-      }, {} as Record<string, typeof documents>);
-
-      return {
-        documents,
-        documentsByFolder,
-      };
+      return documents;
     }),
 
-  // Create document record (after upload)
-  create: protectedProcedure
-    .input(
-      z.object({
-        caseId: z.string(),
-        filename: z.string(),
-        originalName: z.string(),
-        url: z.string(),
-        size: z.number(),
-        mimeType: z.string(),
-        folder: z.enum([
-          "CLIENT_UPLOADS",
-          "INTERNAL_DOCUMENTS",
-          "LEGAL_DOCUMENTS",
-          "EVIDENCE_FILES",
-          "CONTRACTS",
-          "INVOICES",
-          "CORRESPONDENCE",
-        ]),
-        description: z.string().optional(),
-        isPublic: z.boolean().default(false),
-      })
-    )
+  // Update document with case association
+  update: protectedProcedure
+    .input(z.object({
+      fileUrl: z.string(),
+      caseId: z.string().optional(),
+      fileName: z.string().optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
-      const { user } = ctx.session;
-
-      // Check if user has access to this case
-      const case_ = await ctx.db.case.findUnique({
-        where: { id: input.caseId },
-        select: { clientId: true, assignedToId: true },
+      const document = await ctx.db.document.findFirst({
+        where: { url: input.fileUrl },
       });
 
-      if (!case_) {
+      if (!document) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Case not found",
+          message: "Document not found",
         });
       }
 
-      // Check permissions for document upload
-      if (user.role === "CLIENT") {
-        if (case_.clientId !== user.id) {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "You can only upload documents to your own cases",
-          });
-        }
-        // Clients can only upload to CLIENT_UPLOADS folder
-        if (input.folder !== "CLIENT_UPLOADS") {
-          throw new TRPCError({
-            code: "FORBIDDEN",
-            message: "Clients can only upload to the Client Uploads folder",
-          });
-        }
-      }
-
-      if (user.role === "STAFF" && case_.assignedToId !== user.id) {
+      // Check if user can update this document
+      if (document.uploadedById !== ctx.session.user.id && 
+          !["ADMIN", "STAFF", "LEGAL"].includes(ctx.session.user.role)) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "You can only upload documents to cases assigned to you",
+          message: "You can only update your own documents",
         });
       }
 
-      const document = await ctx.db.document.create({
-        data: {
-          ...input,
-          uploadedById: user.id,
-        },
-        include: {
-          uploadedBy: {
-            select: { id: true, name: true },
-          },
-        },
-      });
-
-      // Create timeline entry
-      await ctx.db.caseTimeline.create({
+      return ctx.db.document.update({
+        where: { id: document.id },
         data: {
           caseId: input.caseId,
-          event: "Document Uploaded",
-          description: `Document "${input.originalName}" uploaded to ${input.folder}`,
-          eventType: "DOCUMENT_UPLOADED",
-          createdById: user.id,
+          filename: input.fileName ?? document.filename,
         },
       });
-
-      return document;
     }),
 
-  // Delete document
-  delete: staffProcedure
+  // Delete a document
+  delete: protectedProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const { user } = ctx.session;
-
       const document = await ctx.db.document.findUnique({
         where: { id: input.id },
-        include: {
-          case: {
-            select: { assignedToId: true },
-          },
-        },
       });
 
       if (!document) {
@@ -184,120 +113,83 @@ export const documentRouter = createTRPCRouter({
         });
       }
 
-      // Check permissions
-      if (user.role === "STAFF" && document.case.assignedToId !== user.id) {
+      // Check permissions - only uploader, admin, or legal can delete
+      if (document.uploadedById !== ctx.session.user.id && 
+          !["ADMIN", "LEGAL"].includes(ctx.session.user.role)) {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "You can only delete documents from cases assigned to you",
+          message: "You don't have permission to delete this document",
         });
       }
 
-      await ctx.db.document.delete({
+      return ctx.db.document.delete({
         where: { id: input.id },
       });
-
-      // TODO: Delete actual file from storage
-
-      return { success: true };
     }),
 
-  // Update document visibility
-  updateVisibility: staffProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        isPublic: z.boolean(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
+  // Get all documents for current user
+  getMyDocuments: protectedProcedure
+    .query(async ({ ctx }) => {
       const { user } = ctx.session;
 
-      const document = await ctx.db.document.findUnique({
-        where: { id: input.id },
-        include: {
+      let whereClause: any = {};
+
+      if (user.role === "CLIENT") {
+        // Clients can only see their own documents
+        whereClause = { uploadedById: user.id };
+      } else if (user.role === "STAFF") {
+        // Staff can see documents for cases assigned to them
+        whereClause = {
           case: {
-            select: { assignedToId: true },
+            assignedToId: user.id,
           },
-        },
-      });
-
-      if (!document) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Document not found",
-        });
+        };
       }
+      // LEGAL and ADMIN can see all documents (no where clause)
 
-      // Check permissions
-      if (user.role === "STAFF" && document.case.assignedToId !== user.id) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "You can only modify documents from cases assigned to you",
-        });
-      }
-
-      const updatedDocument = await ctx.db.document.update({
-        where: { id: input.id },
-        data: { isPublic: input.isPublic },
+      const documents = await ctx.db.document.findMany({
+        where: whereClause,
         include: {
           uploadedBy: {
             select: { id: true, name: true },
           },
+          case: {
+            select: { id: true, caseNumber: true, title: true },
+          },
         },
+        orderBy: { createdAt: "desc" },
       });
 
-      return updatedDocument;
+      return documents;
     }),
 
-  // Get client documents
-  getClientDocuments: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.session.user.role !== "CLIENT") {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Only clients can access their documents",
+  // Create document (for UploadThing integration)
+  create: protectedProcedure
+    .input(z.object({
+      filename: z.string(),
+      originalName: z.string(),
+      url: z.string(),
+      size: z.number(),
+      mimeType: z.string(),
+      caseId: z.string(),
+      folder: z.enum(["CONTRACTS", "EVIDENCE", "CORRESPONDENCE", "LEGAL_DOCS", "INVOICES", "OTHER"]).default("OTHER"),
+      description: z.string().optional(),
+      isPublic: z.boolean().default(false),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.db.document.create({
+        data: {
+          filename: input.filename,
+          originalName: input.originalName,
+          url: input.url,
+          size: input.size,
+          mimeType: input.mimeType,
+          folder: input.folder,
+          caseId: input.caseId,
+          uploadedById: ctx.session.user.id,
+          description: input.description,
+          isPublic: input.isPublic,
+        },
       });
-    }
-
-    return ctx.db.document.findMany({
-      where: {
-        OR: [
-          { uploadedById: ctx.session.user.id },
-          {
-            case: { clientId: ctx.session.user.id },
-            isPublic: true,
-          },
-        ],
-      },
-      include: {
-        case: true,
-        uploadedBy: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-  }),
-
-  // Get legal documents
-  getLegalDocuments: protectedProcedure.query(async ({ ctx }) => {
-    if (ctx.session.user.role !== "LEGAL" && ctx.session.user.role !== "ADMIN") {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Only legal counsel can access legal documents",
-      });
-    }
-
-    return ctx.db.document.findMany({
-      where: {
-        documentType: { in: ["CONTRACT", "LEGAL_BRIEF", "COURT_FILING", "JUDGMENT"] },
-      },
-      include: {
-        case: true,
-        uploadedBy: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-  }),
+    }),
 });

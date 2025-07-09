@@ -11,7 +11,7 @@ import Link from "next/link";
 export default function LegalDashboardPage() {
   const { data: session } = useSession();
   const { data: legalCases, isLoading: casesLoading } = api.case.getLegalCases.useQuery();
-  const { data: documents, isLoading: documentsLoading } = api.document.getLegalDocuments.useQuery();
+  const { data: documents, isLoading: documentsLoading } = api.document.getMyDocuments.useQuery();
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {

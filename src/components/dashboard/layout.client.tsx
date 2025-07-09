@@ -8,12 +8,12 @@ export default function ClientDashboardLayout({ children }: { children: React.Re
         <h1 className="text-2xl font-bold">Client Portal</h1>
         <nav className="flex gap-4">
           <Link href="/dashboard">Dashboard</Link>
-          <Link href="/dashboard/cases">My Cases</Link>
-          <Link href="/dashboard/file-case">File a Case</Link>
-          <Link href="/dashboard/documents">Documents</Link>
-          <Link href="/dashboard/messages">Messages</Link>
-          <Link href="/dashboard/payments">Payments</Link>
-          <Link href="/dashboard/profile">Profile</Link>
+          <Link href="/dashboard/client/cases">My Cases</Link>
+          <Link href="/dashboard/client/cases/new">File a Case</Link>
+          <Link href="/dashboard/client/documents">Documents</Link>
+          <Link href="/dashboard/client">Messages</Link>
+          <Link href="/dashboard/client">Payments</Link>
+          <Link href="/dashboard/client">Profile</Link>
         </nav>
       </header>
       <main className="flex-1 bg-background p-6">{children}</main>
