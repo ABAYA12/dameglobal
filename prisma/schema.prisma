@@ -1,0 +1,406 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(CLIENT)
+  company       String?
+  phone         String?
+  address       String?
+  postalAddress String?
+  
+  accounts      Account[]
+  sessions      Session[]
+  
+  // Case relationships
+  casesAsClient    Case[] @relation("ClientCases")
+  casesAsAssigned  Case[] @relation("AssignedCases")
+  
+  // Communication
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  
+  // Documents
+  uploadedDocuments Document[]
+  
+  // Financial
+  invoices         Invoice[]
+  payments         Payment[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Case Management System
+model Case {
+  id              String     @id @default(cuid())
+  caseNumber      String     @unique
+  title           String
+  description     String?    @db.Text
+  status          CaseStatus @default(RECEIVED)
+  priority        Priority   @default(MEDIUM)
+  
+  // Client Information
+  clientId        String
+  client          User       @relation("ClientCases", fields: [clientId], references: [id])
+  
+  // Assignment
+  assignedToId    String?
+  assignedTo      User?      @relation("AssignedCases", fields: [assignedToId], references: [id])
+  
+  // Creditor Information
+  creditorName           String
+  creditorRegNumber      String?
+  creditorContactPerson  String?
+  creditorEmail          String
+  creditorPhone          String
+  creditorAddress        String
+  creditorPostalAddress  String?
+  
+  // Debtor Information
+  debtorName            String
+  debtorRegNumber       String?
+  debtorAddress         String
+  debtorPhone           String?
+  debtorEmail           String?
+  debtorBusinessType    String?
+  
+  // Debt Details
+  principalAmount       Float
+  currency              String   @default("GHS")
+  interestRate          Float?
+  accruedInterest       Float?   @default(0)
+  totalAmountDue        Float
+  originalDueDate       DateTime
+  paymentTerms          String?
+  debtCategory          String
+  
+  // Case Management
+  preferredRecoveryMethod String?
+  previousAttempts        String? @db.Text
+  specialInstructions     String? @db.Text
+  preferredCommunication  String?
+  
+  // Relationships
+  documents    Document[]
+  messages     Message[]
+  timeline     CaseTimeline[]
+  invoices     Invoice[]
+  payments     Payment[]
+  tickets      Ticket[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("cases")
+}
+
+// Document Management
+model Document {
+  id          String       @id @default(cuid())
+  filename    String
+  originalName String
+  url         String
+  size        Int
+  mimeType    String
+  folder      DocumentFolder
+  
+  // Case association
+  caseId      String
+  case        Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  
+  // Upload information
+  uploadedById String
+  uploadedBy   User        @relation(fields: [uploadedById], references: [id])
+  
+  // Document metadata
+  description String?
+  isPublic    Boolean     @default(false) // Client visible
+  version     Int         @default(1)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("documents")
+}
+
+// Communication System
+model Message {
+  id        String      @id @default(cuid())
+  content   String      @db.Text
+  subject   String?
+  type      MessageType @default(INTERNAL)
+  
+  // Sender and Receiver
+  senderId    String
+  sender      User      @relation("SentMessages", fields: [senderId], references: [id])
+  receiverId  String
+  receiver    User      @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  
+  // Case association
+  caseId      String
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  
+  // Message status
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+  
+  // Email tracking
+  emailSent   Boolean   @default(false)
+  emailSentAt DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("messages")
+}
+
+// Case Timeline
+model CaseTimeline {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  
+  event       String
+  description String?  @db.Text
+  eventType   TimelineEventType
+  
+  // User who created the event
+  createdById String?
+  
+  createdAt DateTime @default(now())
+
+  @@map("case_timeline")
+}
+
+// Ticketing System
+model Ticket {
+  id          String       @id @default(cuid())
+  ticketNumber String      @unique
+  title       String
+  description String       @db.Text
+  status      TicketStatus @default(OPEN)
+  priority    Priority     @default(MEDIUM)
+  category    String
+  
+  // Case association
+  caseId      String?
+  case        Case?       @relation(fields: [caseId], references: [id])
+  
+  // Assignment
+  assignedToId String?
+  
+  // Resolution
+  resolution   String?     @db.Text
+  resolvedAt   DateTime?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tickets")
+}
+
+// Financial Management
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  amount        Float
+  currency      String        @default("GHS")
+  description   String?       @db.Text
+  status        InvoiceStatus @default(PENDING)
+  dueDate       DateTime
+  
+  // Client association
+  clientId      String
+  client        User          @relation(fields: [clientId], references: [id])
+  
+  // Case association
+  caseId        String
+  case          Case          @relation(fields: [caseId], references: [id])
+  
+  // Payment tracking
+  payments      Payment[]
+  paidAmount    Float         @default(0)
+  
+  // PDF generation
+  pdfUrl        String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("invoices")
+}
+
+model Payment {
+  id              String        @id @default(cuid())
+  amount          Float
+  currency        String        @default("GHS")
+  paymentMethod   String
+  transactionId   String?
+  status          PaymentStatus @default(PENDING)
+  
+  // Client association
+  clientId        String
+  client          User          @relation(fields: [clientId], references: [id])
+  
+  // Invoice association
+  invoiceId       String
+  invoice         Invoice       @relation(fields: [invoiceId], references: [id])
+  
+  // Case association
+  caseId          String
+  case            Case          @relation(fields: [caseId], references: [id])
+  
+  // Payment processor data
+  stripePaymentId String?
+  receiptUrl      String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("payments")
+}
+
+// System Configuration
+model SystemSettings {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String @db.Text
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+// Enums
+enum UserRole {
+  CLIENT
+  STAFF
+  LEGAL
+  ADMIN
+}
+
+enum CaseStatus {
+  RECEIVED
+  UNDER_REVIEW
+  INVESTIGATION
+  ACTIVE_RECOVERY
+  NEGOTIATION
+  LEGAL_ACTION
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum DocumentFolder {
+  CLIENT_UPLOADS
+  INTERNAL_DOCUMENTS
+  LEGAL_DOCUMENTS
+  EVIDENCE_FILES
+  CONTRACTS
+  INVOICES
+  CORRESPONDENCE
+}
+
+enum MessageType {
+  INTERNAL
+  CLIENT_COMMUNICATION
+  EMAIL
+  SMS
+  SYSTEM
+}
+
+enum TimelineEventType {
+  CASE_CREATED
+  STATUS_CHANGE
+  DOCUMENT_UPLOADED
+  MESSAGE_SENT
+  PAYMENT_RECEIVED
+  ASSIGNMENT_CHANGED
+  DEADLINE_SET
+  MILESTONE_REACHED
+  LEGAL_ACTION
+  RESOLUTION
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CLIENT
+  RESOLVED
+  CLOSED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
