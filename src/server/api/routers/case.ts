@@ -394,4 +394,93 @@ export const caseRouter = createTRPCRouter({
         casesByPriority,
       };
     }),
+
+  // Get client's cases
+  getClientCases: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.session.user.role !== "CLIENT") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only clients can access their cases",
+        });
+      }
+
+      return await ctx.db.case.findMany({
+        where: { clientId: ctx.session.user.id },
+        include: {
+          assignedTo: {
+            select: { id: true, name: true, email: true },
+          },
+          _count: {
+            select: {
+              documents: true,
+              messages: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    }),
+
+  // Get staff's assigned cases
+  getStaffCases: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.session.user.role !== "STAFF") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only staff can access their assigned cases",
+        });
+      }
+
+      return await ctx.db.case.findMany({
+        where: { assignedToId: ctx.session.user.id },
+        include: {
+          client: {
+            select: { id: true, name: true, email: true },
+          },
+          _count: {
+            select: {
+              documents: true,
+              messages: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    }),
+
+  // Get legal cases
+  getLegalCases: protectedProcedure
+    .query(async ({ ctx }) => {
+      if (ctx.session.user.role !== "LEGAL") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only legal team can access legal cases",
+        });
+      }
+
+      return await ctx.db.case.findMany({
+        where: {
+          OR: [
+            { status: "LEGAL_ACTION" },
+            { status: "NEGOTIATION" },
+          ],
+        },
+        include: {
+          client: {
+            select: { id: true, name: true, email: true },
+          },
+          assignedTo: {
+            select: { id: true, name: true, email: true },
+          },
+          _count: {
+            select: {
+              documents: true,
+              messages: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    }),
 });
