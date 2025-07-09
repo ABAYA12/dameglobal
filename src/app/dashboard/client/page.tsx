@@ -1,5 +1,7 @@
 "use client";
 
+export const dynamic = 'force-dynamic';
+
 import { useSession } from "next-auth/react";
 import { api } from "~/utils/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
@@ -9,10 +11,26 @@ import { FolderOpen, FileText, MessageSquare, CreditCard, Plus, ArrowRight } fro
 import Link from "next/link";
 
 export default function ClientDashboardPage() {
-  const { data: session } = useSession();
-  const { data: cases, isLoading: casesLoading } = api.case.getClientCases.useQuery();
-  const { data: documents, isLoading: documentsLoading } = api.document.getClientDocuments.useQuery();
-  const { data: messages, isLoading: messagesLoading } = api.message.getClientMessages.useQuery();
+  const { data: session, status } = useSession();
+  const { data: cases, isLoading: casesLoading } = api.case.getClientCases.useQuery(undefined, {
+    enabled: !!session,
+  });
+  const { data: documents, isLoading: documentsLoading } = api.document.getClientDocuments.useQuery(undefined, {
+    enabled: !!session,
+  });
+  const { data: messages, isLoading: messagesLoading } = api.message.getClientMessages.useQuery(undefined, {
+    enabled: !!session,
+  });
+
+  // Show loading while session is being fetched
+  if (status === "loading") {
+    return <div className="p-6">Loading...</div>;
+  }
+
+  // Redirect if not authenticated
+  if (!session) {
+    return <div className="p-6">Please sign in to access the dashboard.</div>;
+  }
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {

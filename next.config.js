@@ -6,6 +6,11 @@ const config = {
   images: {
     domains: ['localhost', 'uploadthing.com', 'utfs.io'],
   },
+  // Skip static optimization for dashboard pages
+  async generateBuildId() {
+    return 'debt-recovery-portal-build'
+  },
+  output: 'standalone'
 };
 
 module.exports = config;
