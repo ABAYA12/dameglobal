@@ -11,7 +11,7 @@ import Link from "next/link";
 export default function ClientDashboardPage() {
   const { data: session } = useSession();
   const { data: cases, isLoading: casesLoading } = api.case.getClientCases.useQuery();
-  const { data: documents, isLoading: documentsLoading } = api.document.getMyDocuments.useQuery();
+  const { data: documents, isLoading: documentsLoading } = api.document.getClientDocuments.useQuery();
   const { data: messages, isLoading: messagesLoading } = api.message.getClientMessages.useQuery();
 
   const getStatusBadgeColor = (status: string) => {
