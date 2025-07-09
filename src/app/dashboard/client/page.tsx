@@ -156,7 +156,7 @@ export default function ClientDashboardPage() {
                     <Badge className={getStatusBadgeColor(case_.status)}>
                       {case_.status}
                     </Badge>
-                    <span className="text-sm font-medium">${case_.amount}</span>
+                    <span className="text-sm font-medium">${case_.totalAmountDue}</span>
                   </div>
                 </div>
               ))}

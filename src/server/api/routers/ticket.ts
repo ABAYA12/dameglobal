@@ -72,4 +72,24 @@ export const ticketRouter = createTRPCRouter({
 
       return ticket;
     }),
+
+  // Get staff tickets
+  getStaffTickets: staffProcedure.query(async ({ ctx }) => {
+    return ctx.db.ticket.findMany({
+      where: {
+        OR: [
+          { assignedToId: ctx.session.user.id },
+          { assignedToId: null }, // Unassigned tickets
+        ],
+      },
+      include: {
+        case: {
+          select: { id: true, caseNumber: true, title: true },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }),
 });

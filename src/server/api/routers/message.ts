@@ -288,4 +288,32 @@ export const messageRouter = createTRPCRouter({
 
       return { messages };
     }),
+
+  // Get client messages
+  getClientMessages: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== "CLIENT") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only clients can access their messages",
+      });
+    }
+
+    return ctx.db.message.findMany({
+      where: {
+        OR: [
+          { senderId: ctx.session.user.id },
+          { receiverId: ctx.session.user.id },
+        ],
+      },
+      include: {
+        sender: true,
+        receiver: true,
+        case: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 20,
+    });
+  }),
 });

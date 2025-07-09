@@ -395,92 +395,118 @@ export const caseRouter = createTRPCRouter({
       };
     }),
 
-  // Get client's cases
-  getClientCases: protectedProcedure
-    .query(async ({ ctx }) => {
-      if (ctx.session.user.role !== "CLIENT") {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Only clients can access their cases",
-        });
-      }
-
-      return await ctx.db.case.findMany({
-        where: { clientId: ctx.session.user.id },
-        include: {
-          assignedTo: {
-            select: { id: true, name: true, email: true },
-          },
-          _count: {
-            select: {
-              documents: true,
-              messages: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "desc" },
+  // Get client cases
+  getClientCases: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== "CLIENT") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only clients can access their cases",
       });
-    }),
+    }
 
-  // Get staff's assigned cases
-  getStaffCases: protectedProcedure
-    .query(async ({ ctx }) => {
-      if (ctx.session.user.role !== "STAFF") {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Only staff can access their assigned cases",
-        });
-      }
-
-      return await ctx.db.case.findMany({
-        where: { assignedToId: ctx.session.user.id },
-        include: {
-          client: {
-            select: { id: true, name: true, email: true },
-          },
-          _count: {
-            select: {
-              documents: true,
-              messages: true,
-            },
-          },
+    return ctx.db.case.findMany({
+      where: {
+        clientId: ctx.session.user.id,
+      },
+      include: {
+        client: {
+          select: { id: true, name: true, email: true },
         },
-        orderBy: { createdAt: "desc" },
-      });
-    }),
+        assignedTo: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }),
+
+  // Get staff assigned cases
+  getStaffAssignedCases: staffProcedure.query(async ({ ctx }) => {
+    return ctx.db.case.findMany({
+      where: {
+        assignedToId: ctx.session.user.id,
+      },
+      include: {
+        client: {
+          select: { id: true, name: true, email: true },
+        },
+        assignedTo: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }),
+
+  // Get all cases (admin/staff)
+  getAllCases: staffProcedure.query(async ({ ctx }) => {
+    return ctx.db.case.findMany({
+      include: {
+        client: {
+          select: { id: true, name: true, email: true },
+        },
+        assignedTo: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }),
 
   // Get legal cases
-  getLegalCases: protectedProcedure
-    .query(async ({ ctx }) => {
-      if (ctx.session.user.role !== "LEGAL") {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Only legal team can access legal cases",
-        });
-      }
-
-      return await ctx.db.case.findMany({
-        where: {
-          OR: [
-            { status: "LEGAL_ACTION" },
-            { status: "NEGOTIATION" },
-          ],
-        },
-        include: {
-          client: {
-            select: { id: true, name: true, email: true },
-          },
-          assignedTo: {
-            select: { id: true, name: true, email: true },
-          },
-          _count: {
-            select: {
-              documents: true,
-              messages: true,
-            },
-          },
-        },
-        orderBy: { createdAt: "desc" },
+  getLegalCases: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== "LEGAL" && ctx.session.user.role !== "ADMIN") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only legal counsel can access legal cases",
       });
-    }),
+    }
+
+    return ctx.db.case.findMany({
+      where: {
+        OR: [
+          { assignedToId: ctx.session.user.id },
+          { status: "UNDER_REVIEW" },
+        ],
+      },
+      include: {
+        client: {
+          select: { id: true, name: true, email: true },
+        },
+        assignedTo: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }),
+
+  // Get analytics
+  getAnalytics: adminProcedure.query(async ({ ctx }) => {
+    const totalCases = await ctx.db.case.count();
+    const activeCases = await ctx.db.case.count({
+      where: { status: { not: "CLOSED" } },
+    });
+    const resolvedCases = await ctx.db.case.count({
+      where: { status: "RESOLVED" },
+    });
+    const totalAmount = await ctx.db.case.aggregate({
+      _sum: { totalAmountDue: true },
+    });
+
+    return {
+      totalCases,
+      activeCases,
+      resolvedCases,
+      totalAmount: totalAmount._sum.totalAmountDue || 0,
+    };
+  }),
 });

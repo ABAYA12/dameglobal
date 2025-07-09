@@ -248,4 +248,56 @@ export const documentRouter = createTRPCRouter({
 
       return updatedDocument;
     }),
+
+  // Get client documents
+  getClientDocuments: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== "CLIENT") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only clients can access their documents",
+      });
+    }
+
+    return ctx.db.document.findMany({
+      where: {
+        OR: [
+          { uploadedById: ctx.session.user.id },
+          {
+            case: { clientId: ctx.session.user.id },
+            isPublic: true,
+          },
+        ],
+      },
+      include: {
+        case: true,
+        uploadedBy: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }),
+
+  // Get legal documents
+  getLegalDocuments: protectedProcedure.query(async ({ ctx }) => {
+    if (ctx.session.user.role !== "LEGAL" && ctx.session.user.role !== "ADMIN") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only legal counsel can access legal documents",
+      });
+    }
+
+    return ctx.db.document.findMany({
+      where: {
+        documentType: { in: ["CONTRACT", "LEGAL_BRIEF", "COURT_FILING", "JUDGMENT"] },
+      },
+      include: {
+        case: true,
+        uploadedBy: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }),
 });

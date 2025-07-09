@@ -122,6 +122,31 @@ export const userRouter = createTRPCRouter({
       };
     }),
 
+  // Get all users (admin only)
+  getAllUsers: adminProcedure.query(async ({ ctx }) => {
+    return ctx.db.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        company: true,
+        phone: true,
+        createdAt: true,
+        status: true,
+        _count: {
+          select: {
+            casesAsClient: true,
+            casesAsAssigned: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }),
+
   // Get user by ID
   getById: adminProcedure
     .input(z.object({ id: z.string() }))
