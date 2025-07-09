@@ -38,7 +38,7 @@ export const ourFileRouter = {
           url: file.url,
           size: file.size,
           mimeType: file.type,
-          folder: "OTHER", // Default folder
+          folder: "CLIENT_UPLOADS", // Default folder
           caseId: "", // Will be updated when associated with a case
           uploadedById: metadata.userId,
         },

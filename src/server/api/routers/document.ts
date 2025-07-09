@@ -172,7 +172,7 @@ export const documentRouter = createTRPCRouter({
       size: z.number(),
       mimeType: z.string(),
       caseId: z.string(),
-      folder: z.enum(["CONTRACTS", "EVIDENCE", "CORRESPONDENCE", "LEGAL_DOCS", "INVOICES", "OTHER"]).default("OTHER"),
+      folder: z.enum(["CLIENT_UPLOADS", "INTERNAL_DOCUMENTS", "LEGAL_DOCUMENTS", "EVIDENCE_FILES", "CONTRACTS", "INVOICES", "CORRESPONDENCE"]).default("CLIENT_UPLOADS"),
       description: z.string().optional(),
       isPublic: z.boolean().default(false),
     }))
@@ -190,6 +190,69 @@ export const documentRouter = createTRPCRouter({
           description: input.description,
           isPublic: input.isPublic,
         },
+      });
+    }),
+
+  // Get documents for client dashboard
+  getClientDocuments: protectedProcedure
+    .query(async ({ ctx }) => {
+      const { user } = ctx.session;
+
+      if (user.role !== "CLIENT") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only clients can access this endpoint",
+        });
+      }
+
+      return ctx.db.document.findMany({
+        where: {
+          OR: [
+            { uploadedById: user.id },
+            { 
+              isPublic: true,
+              case: { clientId: user.id }
+            }
+          ]
+        },
+        include: {
+          case: {
+            select: { id: true, caseNumber: true, title: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+      });
+    }),
+
+  // Get documents for legal dashboard
+  getLegalDocuments: protectedProcedure
+    .query(async ({ ctx }) => {
+      const { user } = ctx.session;
+
+      if (user.role !== "LEGAL") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Only legal staff can access this endpoint",
+        });
+      }
+
+      return ctx.db.document.findMany({
+        where: {
+          folder: {
+            in: ["LEGAL_DOCUMENTS", "EVIDENCE_FILES", "CONTRACTS"]
+          }
+        },
+        include: {
+          case: {
+            select: { id: true, caseNumber: true, title: true },
+          },
+          uploadedBy: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 10,
       });
     }),
 });

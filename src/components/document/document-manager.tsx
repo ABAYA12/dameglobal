@@ -140,19 +140,19 @@ export function DocumentManager({
                 >
                   <div className="flex items-center gap-3 flex-1">
                     <div className="text-2xl">
-                      {getFileIcon(document.fileType || "")}
+                      {getFileIcon(document.mimeType || "")}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-medium text-sm">{document.fileName}</h4>
+                      <h4 className="font-medium text-sm">{document.filename}</h4>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge 
                           variant="secondary"
-                          className={getFileTypeColor(document.fileType || "")}
+                          className={getFileTypeColor(document.mimeType || "")}
                         >
-                          {document.fileType?.split('/')[1]?.toUpperCase() || 'UNKNOWN'}
+                          {document.mimeType?.split('/')[1]?.toUpperCase() || 'UNKNOWN'}
                         </Badge>
                         <span className="text-xs text-gray-500">
-                          {formatBytes(document.fileSize || 0)}
+                          {formatBytes(document.size || 0)}
                         </span>
                         <span className="text-xs text-gray-500">
                           {document.createdAt.toLocaleDateString()}
@@ -165,7 +165,7 @@ export function DocumentManager({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => window.open(document.fileUrl, '_blank')}
+                      onClick={() => window.open(document.url, '_blank')}
                     >
                       <Eye className="h-4 w-4" />
                     </Button>
@@ -173,9 +173,9 @@ export function DocumentManager({
                       variant="ghost"
                       size="sm"
                       onClick={() => {
-                        const link = document.createElement('a');
-                        link.href = document.fileUrl;
-                        link.download = document.fileName;
+                        const link = window.document.createElement('a');
+                        link.href = document.url;
+                        link.download = document.filename;
                         link.click();
                       }}
                     >

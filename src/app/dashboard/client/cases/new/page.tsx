@@ -210,8 +210,8 @@ export default function NewCasePage() {
       {/* Form Content */}
       <Card>
         <CardHeader>
-          <CardTitle>{steps[currentStep - 1].title}</CardTitle>
-          <CardDescription>{steps[currentStep - 1].description}</CardDescription>
+          <CardTitle>{steps[currentStep - 1]?.title || "Case Filing"}</CardTitle>
+          <CardDescription>{steps[currentStep - 1]?.description || "Please fill out the form below"}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {errors.general && (

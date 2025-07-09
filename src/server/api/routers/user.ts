@@ -133,7 +133,6 @@ export const userRouter = createTRPCRouter({
         company: true,
         phone: true,
         createdAt: true,
-        status: true,
         _count: {
           select: {
             casesAsClient: true,

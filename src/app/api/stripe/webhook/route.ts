@@ -11,22 +11,20 @@ export async function POST(req: NextRequest) {
       return new Response('No signature provided', { status: 400 });
     }
 
-    const event = await stripeService.handleWebhook(rawBody, signature);
+    const event = await stripeService.constructEvent(rawBody, signature);
 
-    // Additional processing based on event type
-    const stripeEvent = JSON.parse(rawBody);
-    
-    switch (stripeEvent.type) {
+    // Process the webhook event
+    switch (event.type) {
       case 'payment_intent.succeeded':
-        await handlePaymentSuccess(stripeEvent.data.object);
+        await handlePaymentSuccess(event.data.object);
         break;
       
       case 'invoice.payment_succeeded':
-        await handleInvoicePaymentSuccess(stripeEvent.data.object);
+        await handleInvoicePaymentSuccess(event.data.object);
         break;
         
       case 'payment_intent.payment_failed':
-        await handlePaymentFailure(stripeEvent.data.object);
+        await handlePaymentFailure(event.data.object);
         break;
     }
 
